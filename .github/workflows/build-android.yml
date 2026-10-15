@@ -1,14 +1,38 @@
-      - name: Inspect extracted project
+name: Inspect GoalOS ZIP
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract and inspect ZIP
+        shell: bash
         run: |
-          echo "=== Gradle files ==="
+          set -e
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "No ZIP file found in repository root."
+            exit 1
+          fi
+          mkdir -p extracted
+          unzip -o "$ZIP_FILE" -d extracted
+          echo "=== Project build files ==="
           find extracted -type f \( \
-            -name 'gradlew' -o \
-            -name 'build.gradle' -o \
-            -name 'build.gradle.kts' -o \
-            -name 'settings.gradle' -o \
-            -name 'settings.gradle.kts' -o \
-            -name 'gradle-wrapper.properties' \
+            -name gradlew -o \
+            -name build.gradle -o \
+            -name build.gradle.kts -o \
+            -name settings.gradle -o \
+            -name settings.gradle.kts -o \
+            -name package.json \
           \) -print
-          echo "=== Top-level files ==="
-          find extracted -maxdepth 3 -type f | head -150
+          echo "=== File listing ==="
+          find extracted -maxdepth 3 -type f | head -100
           
