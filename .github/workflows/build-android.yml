@@ -1,0 +1,83 @@
+name: Build GoalOS APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find and extract project ZIP
+        run: |
+          set -e
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: No ZIP file found in repository root."
+            exit 1
+          fi
+          mkdir -p extracted
+          unzip -o "$ZIP_FILE" -d extracted
+          echo "ZIP extracted successfully."
+          find extracted -name package.json -print
+
+      - name: Locate app project
+        run: |
+          PACKAGE=$(find extracted -name package.json -type f | head -n 1)
+          if [ -z "$PACKAGE" ]; then
+            echo "ERROR: No package.json found in ZIP."
+            exit 1
+          fi
+          echo "APP_DIR=$(dirname "$PACKAGE")" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies and build web app
+        run: |
+          cd "$APP_DIR"
+          npm install
+          npm run build
+
+      - name: Set up Capacitor Android
+        run: |
+          cd "$APP_DIR"
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          if [ ! -f capacitor.config.ts ] && \
+             [ ! -f capacitor.config.json ] && \
+             [ ! -f capacitor.config.js ]; then
+            npx cap init GoalOS com.udit.goalos --web-dir dist
+          fi
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: Build debug APK
+        run: |
+          cd "$APP_DIR/android"
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GoalOS-Android-APK
+          path: ${{ env.APP_DIR }}/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+          
